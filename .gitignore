@@ -6,3 +6,4 @@ data/
 db_meta.json
 .DS_Store
 .localized
+demo.cast
