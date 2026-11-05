@@ -1,3 +1,6 @@
+from .utils import load_table_data
+
+
 def create_table(metadata, table_name, columns):
     table_name = table_name.strip()
     if not table_name:
@@ -52,3 +55,69 @@ def list_tables(metadata):
         return
     for table_name in metadata:
         print(f"- {table_name}")
+
+
+def insert(metadata, table_name, values):
+    if table_name not in metadata:
+        print(f'Ошибка: Таблица "{table_name}" не существует.')
+        return None
+    expected_values = len(metadata[table_name]) - 1
+    if expected_values != len(values):
+        print(f"Ошибка: Ожидалось {expected_values} значения, получено {len(values)}")
+        return None
+
+    columns = list(metadata[table_name].items())[1:]
+    type_map = {
+        "int": int,
+        "str": str,
+        "bool": bool,
+    }
+    for (name, column_type), value in zip(columns, values):
+        expected_type = type_map[column_type]
+        if type(value) is not expected_type:
+            print(f"Некорректное значение: {value}. Попробуйте снова.")
+            return None
+    table_data = load_table_data(table_name)
+    new_id = max((row["ID"] for row in table_data), default=0) + 1
+    new_record = {"ID": new_id}
+    for (name, _), value in zip(columns, values):
+        new_record[name] = value
+    table_data.append(new_record)
+    return table_data
+
+
+def select(table_data, where_clause=None):
+    if where_clause is None:
+        return table_data
+
+    column, value = next(iter(where_clause.items()))
+    result = []
+
+    for row in table_data:
+        if row.get(column) == value:
+            result.append(row)
+
+    return result
+
+
+def update(table_data, set_clause, where_clause):
+    set_column, new_value = next(iter(set_clause.items()))
+    where_column, where_value = next(iter(where_clause.items()))
+
+    for row in table_data:
+        if row.get(where_column) == where_value:
+            row[set_column] = new_value
+
+    return table_data
+
+
+def delete(table_data, where_clause):
+    column, value = next(iter(where_clause.items()))
+
+    result = []
+
+    for row in table_data:
+        if row.get(column) != value:
+            result.append(row)
+
+    return result
