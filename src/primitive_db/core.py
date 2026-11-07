@@ -1,3 +1,6 @@
+from pathlib import Path
+
+from .decorators import confirm_action, handle_db_errors, log_time
 from .utils import load_table_data
 
 
@@ -28,8 +31,8 @@ def create_table(metadata, table_name, columns):
         if column_type not in valid_types:
             print(f"Некорректное значение: {column_type}. Попробуйте снова.")
             return metadata
-        if column_name == "ID" and column_type != "int":
-            print("Ошибка: Столбец ID должен иметь тип int.")
+        if column_name == "ID":
+            print("Ошибка: Столбец ID создаётся автоматически.")
             return metadata
 
         used_columns.append(column_name)
@@ -39,10 +42,14 @@ def create_table(metadata, table_name, columns):
     return metadata
 
 
+@confirm_action("удаление таблицы")
 def drop_table(metadata, table_name):
     if table_name not in metadata:
         print(f'Ошибка: Таблица "{table_name}" не существует.')
         return metadata
+
+    filepath = Path(f"data/{table_name}.json")
+    filepath.unlink(missing_ok=True)
 
     del metadata[table_name]
     print(f'Таблица "{table_name}" успешно удалена.')
@@ -57,6 +64,8 @@ def list_tables(metadata):
         print(f"- {table_name}")
 
 
+@log_time
+@handle_db_errors
 def insert(metadata, table_name, values):
     if table_name not in metadata:
         print(f'Ошибка: Таблица "{table_name}" не существует.')
@@ -86,6 +95,8 @@ def insert(metadata, table_name, values):
     return table_data
 
 
+@log_time
+@handle_db_errors
 def select(table_data, where_clause=None):
     if where_clause is None:
         return table_data
@@ -100,6 +111,7 @@ def select(table_data, where_clause=None):
     return result
 
 
+@handle_db_errors
 def update(table_data, set_clause, where_clause):
     set_column, new_value = next(iter(set_clause.items()))
     where_column, where_value = next(iter(where_clause.items()))
@@ -111,6 +123,8 @@ def update(table_data, set_clause, where_clause):
     return table_data
 
 
+@handle_db_errors
+@confirm_action("удаление записей")
 def delete(table_data, where_clause):
     column, value = next(iter(where_clause.items()))
 
