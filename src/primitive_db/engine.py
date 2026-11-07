@@ -12,6 +12,7 @@ from .core import (
     select,
     update,
 )
+from .decorators import create_cacher
 from .utils import (
     load_metadata,
     load_table_data,
@@ -76,6 +77,7 @@ def parse_condition(condition):
 
 def run():
     print_help()
+    cache_result = create_cacher()
 
     while True:
         metadata = load_metadata("db_meta.json")
@@ -116,6 +118,7 @@ def run():
             create_table(metadata, args[1], args[2:])
             if len(metadata) > old_count:
                 save_metadata("db_meta.json", metadata)
+                cache_result = create_cacher()
                 columns = metadata[args[1]]
                 column_description = []
                 for name, column_type in columns.items():
@@ -131,6 +134,7 @@ def run():
             drop_table(metadata, args[1])
             if len(metadata) < tables_before_delete:
                 save_metadata("db_meta.json", metadata)
+                cache_result = create_cacher()
 
         elif command == "insert":
             if len(args) < 4 or args[1] != "into" or args[3] != "values":
@@ -145,6 +149,7 @@ def run():
 
                 if updated_data is not None:
                     save_table_data(table_name, updated_data)
+                    cache_result = create_cacher()
                     print(
                         f"Запись с ID={updated_data[-1]['ID']} "
                         f'успешно добавлена в таблицу "{table_name}".'
@@ -175,8 +180,17 @@ def run():
                     print("Ошибка: Некорректное условие WHERE.")
                     continue
 
-            table_data = load_table_data(table_name)
-            result = select(table_data, where_clause)
+            cache_key = (
+                table_name,
+                tuple(where_clause.items()) if where_clause else None,
+            )
+
+            result = cache_result(
+                cache_key, lambda: select(load_table_data(table_name), where_clause)
+            )
+
+            if result is None:
+                continue
 
             table = PrettyTable()
             table.field_names = list(metadata[table_name])
@@ -222,7 +236,12 @@ def run():
 
                 table_data = load_table_data(table_name)
                 updated_data = update(table_data, set_clause, where_clause)
+
+                if updated_data is None:
+                    continue
+
                 save_table_data(table_name, updated_data)
+                cache_result = create_cacher()
 
                 print(f'Данные таблицы "{table_name}" обновлены.')
 
@@ -250,10 +269,14 @@ def run():
             table_data = load_table_data(table_name)
             updated_data = delete(table_data, where_clause)
 
+            if updated_data is None:
+                continue
+
             deleted_count = len(table_data) - len(updated_data)
 
             if deleted_count > 0:
                 save_table_data(table_name, updated_data)
+                cache_result = create_cacher()
                 print(f"Удалено записей: {deleted_count}.")
             else:
                 print("Записи не найдены.")
